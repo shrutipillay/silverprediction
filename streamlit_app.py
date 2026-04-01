@@ -1,15 +1,9 @@
-import os
-os.environ['TZ'] = 'UTC'
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-
-# Set matplotlib backend BEFORE importing pyplot
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 from datetime import datetime, timedelta
 import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
@@ -49,7 +43,7 @@ show_historical = st.sidebar.checkbox("Show Historical Data", value=True)
 show_test_predictions = st.sidebar.checkbox("Show Test Predictions", value=True)
 show_forecast = st.sidebar.checkbox("Show 1-Year Forecast", value=True)
 
-# Data loading function with caching and TTL
+# Data loading function with caching
 @st.cache_data(ttl=3600)
 def load_silver_data():
     """Load silver price data from Yahoo Finance"""
@@ -72,13 +66,9 @@ def load_silver_data():
         st.error(f"Error loading data: {str(e)}")
         return None
 
-@st.cache_data(ttl=3600)
-def train_prophet_model(df_json):
+def train_prophet_model(df):
     """Train Prophet model and generate forecasts"""
     try:
-        df = pd.read_json(df_json, orient='split')
-        df['ds'] = pd.to_datetime(df['ds'])
-        
         total_days = len(df)
         train_days = int(total_days - (365 * 0.5))
         test_start_idx = train_days
@@ -137,8 +127,7 @@ def train_prophet_model(df_json):
             'forecast_test_df': forecast_test_df,
             'forecast_future': forecast_future,
             'rmse': rmse,
-            'mape': mape,
-            'scaler': scaler
+            'mape': mape
         }
     except Exception as e:
         st.error(f"Error training model: {str(e)}")
@@ -148,11 +137,8 @@ def train_prophet_model(df_json):
 df = load_silver_data()
 
 if df is not None and len(df) > 0:
-    # Convert to JSON for caching
-    df_json = df.to_json(orient='split', date_format='iso')
-    
     # Train model
-    model_results = train_prophet_model(df_json)
+    model_results = train_prophet_model(df)
     
     if model_results:
         train_df = model_results['train_df']
