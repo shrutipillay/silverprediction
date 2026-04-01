@@ -7,9 +7,6 @@ font = "sans serif"
 
 [client]
 showErrorDetails = false
-toolbarMode = "viewer"
 
 [server]
 maxUploadSize = 200
-enableCORS = false
-enableXsrfProtection = true
