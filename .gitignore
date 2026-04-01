@@ -1,0 +1,18 @@
+# Virtual Environment
+venv/
+env/
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output data
+*.csv
+*.png
