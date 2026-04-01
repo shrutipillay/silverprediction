@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for Streamlit
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import yfinance as yf
@@ -78,14 +80,16 @@ def train_prophet_model(df):
     train_scaled = train_df.copy()
     train_scaled['y'] = scaler.fit_transform(train_df[['y']])
     
-    model = Prophet(
-        yearly_seasonality=True,
-        weekly_seasonality=True,
-        daily_seasonality=False,
-        interval_width=0.95,
-        changepoint_prior_scale=0.05
-    )
-    model.fit(train_scaled)
+    with st.spinner('Training Prophet model... This may take a minute...'):
+        model = Prophet(
+            yearly_seasonality=True,
+            weekly_seasonality=True,
+            daily_seasonality=False,
+            interval_width=0.95,
+            changepoint_prior_scale=0.05,
+            interval_width_seasonality=0.95
+        )
+        model.fit(train_scaled)
     
     # Test predictions
     future_test = test_df[['ds']].copy()
