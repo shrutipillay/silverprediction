@@ -48,8 +48,16 @@ def fetch_silver_data():
     return dates, close_prices
 
 def train_model(dates, prices):
-    """Train Prophet model and forecast"""
+    """Train optimized Prophet model and forecast"""
     df = pd.DataFrame({'ds': dates, 'y': prices})
+    
+    # Remove outliers using IQR method
+    Q1 = df['y'].quantile(0.25)
+    Q3 = df['y'].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    df = df[(df['y'] >= lower_bound) & (df['y'] <= upper_bound)].copy()
     
     # Split data
     total_days = len(df)
@@ -63,12 +71,15 @@ def train_model(dates, prices):
     train_scaled = train_df.copy()
     train_scaled['y'] = scaler.fit_transform(train_df[['y']])
     
-    # Fit model
+    # Fit optimized model (Config 2: Moderate)
     model = Prophet(
         yearly_seasonality=True,
         weekly_seasonality=True,
         daily_seasonality=False,
-        interval_width=0.95
+        interval_width=0.95,
+        changepoint_prior_scale=0.05,
+        seasonality_prior_scale=5,
+        seasonality_mode='multiplicative'
     )
     model.fit(train_scaled)
     
@@ -83,16 +94,21 @@ def train_model(dates, prices):
         'yhat_upper': scaler.inverse_transform(forecast_test_scaled[['yhat_upper']].values).flatten()
     })
     
-    # Future forecast (next year)
+    # Future forecast (next year) with value clamping
     future_dates = pd.date_range(start=df.iloc[-1]['ds'], periods=365, freq='D')
     future_df = pd.DataFrame({'ds': future_dates})
     forecast_future_scaled = model.predict(future_df)
-    forecast_future_values = scaler.inverse_transform(forecast_future_scaled[['yhat']].values)
+    
+    forecast_future_values_raw = scaler.inverse_transform(forecast_future_scaled[['yhat']].values).flatten()
+    forecast_future_lower_raw = scaler.inverse_transform(forecast_future_scaled[['yhat_lower']].values).flatten()
+    forecast_future_upper_raw = scaler.inverse_transform(forecast_future_scaled[['yhat_upper']].values).flatten()
+    
+    # Clamp to realistic range
     forecast_future = pd.DataFrame({
         'ds': forecast_future_scaled['ds'].values,
-        'yhat': forecast_future_values.flatten(),
-        'yhat_lower': scaler.inverse_transform(forecast_future_scaled[['yhat_lower']].values).flatten(),
-        'yhat_upper': scaler.inverse_transform(forecast_future_scaled[['yhat_upper']].values).flatten()
+        'yhat': np.clip(forecast_future_values_raw, 1, 150),
+        'yhat_lower': np.clip(forecast_future_lower_raw, 1, 150),
+        'yhat_upper': np.clip(forecast_future_upper_raw, 1, 150)
     })
     
     # Calculate metrics

@@ -30,6 +30,14 @@ df = pd.DataFrame({
     'y': close_prices
 })
 
+# Remove outliers using IQR method for better model performance
+Q1 = df['y'].quantile(0.25)
+Q3 = df['y'].quantile(0.75)
+IQR = Q3 - Q1
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+df = df[(df['y'] >= lower_bound) & (df['y'] <= upper_bound)].copy()
+
 # Split data: 4.5 years train, 6 months test
 total_days = len(df)
 train_days = int(total_days - (365 * 0.5))  # Keep last 6 months for test
@@ -50,13 +58,15 @@ train_scaled = train_df.copy()
 train_scaled['y'] = scaler.fit_transform(train_df[['y']])
 
 # Train Prophet on scaled training data
-print("\nTraining Prophet model on scaled data...")
+print("\nTraining optimized Prophet model (Config 2: Moderate)...")
 model = Prophet(
     yearly_seasonality=True,
     weekly_seasonality=True,
     daily_seasonality=False,
     interval_width=0.95,
-    changepoint_prior_scale=0.05
+    changepoint_prior_scale=0.05,
+    seasonality_prior_scale=5,
+    seasonality_mode='multiplicative'
 )
 model.fit(train_scaled)
 
@@ -98,19 +108,27 @@ future_dates = pd.date_range(start=df.iloc[-1]['ds'], periods=365, freq='D')
 future_df = pd.DataFrame({'ds': future_dates})
 forecast_scaled = model.predict(future_df)
 
-# Inverse transform future predictions
-forecast_values = scaler.inverse_transform(
+# Inverse transform future predictions and clamp to realistic range
+forecast_values_raw = scaler.inverse_transform(
     forecast_scaled[['yhat']].values
-)
+).flatten()
+forecast_lower_raw = scaler.inverse_transform(
+    forecast_scaled[['yhat_lower']].values
+).flatten()
+forecast_upper_raw = scaler.inverse_transform(
+    forecast_scaled[['yhat_upper']].values
+).flatten()
+
+# Clamp to realistic silver price range ($1-$150 per oz)
+forecast_values = np.clip(forecast_values_raw, 1, 150)
+forecast_lower = np.clip(forecast_lower_raw, 1, 150)
+forecast_upper = np.clip(forecast_upper_raw, 1, 150)
+
 forecast_future = pd.DataFrame({
     'ds': forecast_scaled['ds'],
-    'yhat': forecast_values.flatten(),
-    'yhat_lower': scaler.inverse_transform(
-        forecast_scaled[['yhat_lower']].values
-    ).flatten(),
-    'yhat_upper': scaler.inverse_transform(
-        forecast_scaled[['yhat_upper']].values
-    ).flatten()
+    'yhat': forecast_values,
+    'yhat_lower': forecast_lower,
+    'yhat_upper': forecast_upper
 })
 
 # Create comprehensive visualization
